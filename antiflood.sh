@@ -29,9 +29,16 @@ readconfig
        source /etc/antiflood.cfg
        $iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
        $iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
-       $iptables -I INPUT -p udp -j udpflood
+       $iptables -N udpflood
+       $iptables -A INPUT -p udp -j udpflood
        $iptables -A udpflood -p udp -m limit --limit 50/s -j RETURN
        $iptables -A udpflood -j DROP
+       #drop icmp
+       $iptables -t mangle -A PREROUTING -p icmp -j DROP
+       #drop fragments in all chains
+       $iptables -t mangle -A PREROUTING -f -j DROP
+       #limit connections per source ip
+       $iptables -A INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
        printf ".:: Anti-flood running\n"
        source /etc/antiflood.cfg
        printf "Port(s): $ports\n"
@@ -59,6 +66,8 @@ checkroot
        $iptables -D INPUT -p udp -j udpflood
        $iptables -D udpflood -p udp -m limit --limit 50/s -j RETURN
        $iptables -D udpflood -j DROP
+       $iptables -X udpflood
+       $iptables -D INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
        printf ".:: Anti-Flood Stopped\n"
        exit 1
     fi
