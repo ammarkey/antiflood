@@ -19,7 +19,7 @@ readconfig() {
         printf "seconds=60\n" >> /etc/antiflood.cfg
         printf "hitcount=3\n" >> /etc/antiflood.cfg
         printf "Done\n"
-fi
+    fi
 }
 start() {
 
@@ -29,6 +29,9 @@ readconfig
        source /etc/antiflood.cfg
        $iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
        $iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       $iptables -I INPUT -p udp -j udpflood
+       $iptables -A udpflood -p udp -m limit --limit 50/s -j RETURN
+       $iptables -A udpflood -j DROP
        printf ".:: Anti-flood running\n"
        source /etc/antiflood.cfg
        printf "Port(s): $ports\n"
@@ -53,6 +56,9 @@ checkroot
        source /etc/antiflood.cfg
        $iptables -D INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
        $iptables -D INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       $iptables -D INPUT -p udp -j udpflood
+       $iptables -D udpflood -p udp -m limit --limit 50/s -j RETURN
+       $iptables -D udpflood -j DROP
        printf ".:: Anti-Flood Stopped\n"
        exit 1
     fi
