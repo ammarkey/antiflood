@@ -1,8 +1,5 @@
 #!/bin/bash
-grep=$(which grep)
-iptables=$(which iptables) >&2
-check=$($iptables -L | $grep -o "antiflood") >&2
-touch=$(which touch) >&2
+check=$(/sbin/iptables -L | /bin/grep -o "antiflood") >&2
 
 checkroot() {
     if [[ "$(id -u)" -ne 0 ]]; then
@@ -14,7 +11,7 @@ readconfig() {
 
     if [ ! -f "/etc/antiflood.cfg" ]; then
         printf ".:: Creating config file (/etc/antiflood.cfg)... "
-        $touch /etc/antiflood.cfg
+        /usr/bin/touch /etc/antiflood.cfg
         printf "ports=21,22,23,25,80,110,143,443\n" >> /etc/antiflood.cfg
         printf "seconds=60\n" >> /etc/antiflood.cfg
         printf "hitcount=3\n" >> /etc/antiflood.cfg
@@ -27,30 +24,54 @@ checkroot
 readconfig
     if [[ $check == "" ]]; then
        source /etc/antiflood.cfg
-       $iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
-       $iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
-       $iptables -N udpflood
-       $iptables -A INPUT -p udp -j udpflood
-       $iptables -A udpflood -p udp -m limit --limit 50/s -j RETURN
-       $iptables -A udpflood -j DROP
+       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
+       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       /sbin/iptables -N udpflood
+       /sbin/iptables -A INPUT -p udp -j udpflood
+       /sbin/iptables -A udpflood -p udp -m limit --limit 50/s -j RETURN
+       /sbin/iptables -A udpflood -j DROP
        #drop icmp
-       $iptables -t mangle -A PREROUTING -p icmp -j DROP
+       /sbin/iptables -t mangle -A PREROUTING -p icmp -j DROP
        #drop fragments in all chains
-       $iptables -t mangle -A PREROUTING -f -j DROP
+       /sbin/iptables -t mangle -A PREROUTING -f -j DROP
        #limit connections per source ip
-       $iptables -A INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
+       /sbin/iptables -A INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
        #limit RST packets
-       $iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
-       $iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP
+       /sbin/iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+       /sbin/iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP
        #drop invalid packets
-       $iptables -t mangle -A PREROUTING -m conntrack --ctstate INVALID -j DROP
+       /sbin/iptables -t mangle -A PREROUTING -m conntrack --ctstate INVALID -j DROP
        #drop tcp packets that are new and are not SYN
-       $iptables -t mangle -A PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+       /sbin/iptables -t mangle -A PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
        #drop SYN packets with suspicios MSS value
-       $iptables -t mangle -A PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+       /sbin/iptables -t mangle -A PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
        #limit new TCP connections per second per source IP
-       $iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
-       $iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP
+       /sbin/iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
+       /sbin/iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP
+       # Block packets with bogus TCP flags ### 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL ALL -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP  
+       # Block spoofed packets ### 
+       /sbin/iptables -t mangle -A PREROUTING -s 224.0.0.0/3 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 169.254.0.0/16 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 172.16.0.0/12 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 192.0.2.0/24 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 192.168.0.0/16 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 10.0.0.0/8 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 0.0.0.0/8 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 240.0.0.0/5 -j DROP 
+       /sbin/iptables -t mangle -A PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
        printf ".:: Anti-flood running\n"
        source /etc/antiflood.cfg
        printf "Port(s): $ports\n"
@@ -73,20 +94,42 @@ checkroot
        exit 1
     else
        source /etc/antiflood.cfg
-       $iptables -D INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
-       $iptables -D INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
-       $iptables -D INPUT -p udp -j udpflood
-       $iptables -D udpflood -p udp -m limit --limit 50/s -j RETURN
-       $iptables -D udpflood -j DROP
-       $iptables -X udpflood
-       $iptables -D INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
-       $iptables -D INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
-       $iptables -D INPUT -p tcp --tcp-flags RST RST -j DROP
-       $iptables -t mangle -D PREROUTING -m conntrack --ctstate INVALID -j DROP
-       $iptables -t mangle -D PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
-       $iptables -t mangle -D PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
-       $iptables -D INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
-       $iptables -D INPUT -p tcp -m conntrack --ctstate NEW -j DROP
+       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
+       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       /sbin/iptables -D INPUT -p udp -j udpflood
+       /sbin/iptables -D udpflood -p udp -m limit --limit 50/s -j RETURN
+       /sbin/iptables -D udpflood -j DROP
+       /sbin/iptables -X udpflood
+       /sbin/iptables -D INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
+       /sbin/iptables -D INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+       /sbin/iptables -D INPUT -p tcp --tcp-flags RST RST -j DROP
+       /sbin/iptables -t mangle -D PREROUTING -m conntrack --ctstate INVALID -j DROP
+       /sbin/iptables -t mangle -D PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+       /sbin/iptables -t mangle -D PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+       /sbin/iptables -D INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
+       /sbin/iptables -D INPUT -p tcp -m conntrack --ctstate NEW -j DROP
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL ALL -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL NONE -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP  
+       /sbin/iptables -t mangle -D PREROUTING -s 224.0.0.0/3 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 169.254.0.0/16 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 172.16.0.0/12 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 192.0.2.0/24 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 192.168.0.0/16 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 10.0.0.0/8 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 0.0.0.0/8 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 240.0.0.0/5 -j DROP 
+       /sbin/iptables -t mangle -D PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
        printf ".:: Anti-Flood Stopped\n"
        exit 1
     fi
@@ -110,7 +153,7 @@ s="${s:-${default_seconds}}"
 read -e -p "Anti-Flood Hitcount (Default: 3): " h
 h="${h:-${default_hitcount}}"
     if [ ! -f "/etc/antiflood.cfg" ]; then
-       $touch /etc/antiflood.cfg
+       /usr/bin/touch /etc/antiflood.cfg
     fi
 printf "ports=$p\n" > /etc/antiflood.cfg
 printf "seconds=$s\n" >> /etc/antiflood.cfg
