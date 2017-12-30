@@ -39,6 +39,18 @@ readconfig
        $iptables -t mangle -A PREROUTING -f -j DROP
        #limit connections per source ip
        $iptables -A INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
+       #limit RST packets
+       $iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+       $iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP
+       #drop invalid packets
+       $iptables -t mangle -A PREROUTING -m conntrack --ctstate INVALID -j DROP
+       #drop tcp packets that are new and are not SYN
+       $iptables -t mangle -A PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+       #drop SYN packets with suspicios MSS value
+       $iptables -t mangle -A PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+       #limit new TCP connections per second per source IP
+       $iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
+       $iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP
        printf ".:: Anti-flood running\n"
        source /etc/antiflood.cfg
        printf "Port(s): $ports\n"
@@ -68,6 +80,13 @@ checkroot
        $iptables -D udpflood -j DROP
        $iptables -X udpflood
        $iptables -D INPUT -p tcp -m connlimit --connlimit-above 111 -j REJECT --reject-with tcp-reset
+       $iptables -D INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+       $iptables -D INPUT -p tcp --tcp-flags RST RST -j DROP
+       $iptables -t mangle -D PREROUTING -m conntrack --ctstate INVALID -j DROP
+       $iptables -t mangle -D PREROUTING  -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+       $iptables -t mangle -D PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+       $iptables -D INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 60/s --limit-burst 20 -j ACCEPT
+       $iptables -D INPUT -p tcp -m conntrack --ctstate NEW -j DROP
        printf ".:: Anti-Flood Stopped\n"
        exit 1
     fi
