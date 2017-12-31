@@ -10,11 +10,11 @@ checkroot() {
 readconfig() {
 
     if [ ! -f "/etc/antiflood.cfg" ]; then
-        printf ".:: Creating config file (/etc/antiflood.cfg)... "
+        printf ".:: Creating bruteforce config file (/etc/antiflood.cfg)... "
         /usr/bin/touch /etc/antiflood.cfg
-        printf "ports=21,22,23,25,80,110,143,443\n" >> /etc/antiflood.cfg
+        printf "ports=21,22,23,25,110,143,443\n" >> /etc/antiflood.cfg
         printf "seconds=60\n" >> /etc/antiflood.cfg
-        printf "hitcount=3\n" >> /etc/antiflood.cfg
+        printf "hitcount=10\n" >> /etc/antiflood.cfg
         printf "Done\n"
     fi
 }
@@ -24,8 +24,10 @@ checkroot
 readconfig
     if [[ $check == "" ]]; then
        source /etc/antiflood.cfg
-       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
-       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       #/sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
+       #/sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m conntrack --ctstate NEW -m recent --set --name antiflood
+       /sbin/iptables -A INPUT -p tcp -m multiport --dports $ports -m conntrack --ctstate NEW -m recent --update --seconds $seconds --hitcount $hitcount -j DROP --name antiflood
        /sbin/iptables -N udpflood
        /sbin/iptables -A INPUT -p udp -j udpflood
        /sbin/iptables -A udpflood -p udp -m limit --limit 50/s -j RETURN
@@ -63,27 +65,53 @@ readconfig
        /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP 
        /sbin/iptables -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP  
        # Block spoofed packets ### 
-       /sbin/iptables -t mangle -A PREROUTING -s 224.0.0.0/3 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 169.254.0.0/16 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 172.16.0.0/12 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 192.0.2.0/24 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 192.168.0.0/16 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 10.0.0.0/8 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 0.0.0.0/8 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 240.0.0.0/5 -j DROP 
-       /sbin/iptables -t mangle -A PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
-       printf ".:: Anti-flood running\n"
+       #/sbin/iptables -t mangle -A PREROUTING -s 224.0.0.0/3 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 169.254.0.0/16 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 172.16.0.0/12 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 192.0.2.0/24 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 192.168.0.0/16 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 10.0.0.0/8 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 0.0.0.0/8 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 240.0.0.0/5 -j DROP 
+       #/sbin/iptables -t mangle -A PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
+       printf ".:: Anti-flood running, config:\n"
+       printf "\n"
+       printf "Drop icmp\n"
+       printf "Drop fragments in all chains\n"
+       printf "Limit connections per source ip\n"
+       printf "Limit RST packets\n"
+       printf "Drop invalid packets\n"
+       printf "Drop tcp packets that are new and are not SYN\n"
+       printf "Drop SYN packets with suspicios MSS value\n"
+       printf "Limit new TCP connections per second per source IP\n"
+       printf "Block packets with bogus TCP flags\n"
+       printf "\n" 
        source /etc/antiflood.cfg
+       printf ".:: Anti-BruteForce config:\n"
+       printf "\n"
        printf "Port(s): $ports\n"
        printf "Seconds: $seconds\n"
        printf "Hitcount: $hitcount\n"
     else
-       printf ".:: Already running with config:\n"
+       #printf ".:: Already running with config:\n"
+       printf ".:: Anti-flood running, config:\n"
+       printf "\n"
+       printf "Drop icmp\n"
+       printf "Drop fragments in all chains\n"
+       printf "Limit connections per source ip\n"
+       printf "Limit RST packets\n"
+       printf "Drop invalid packets\n"
+       printf "Drop tcp packets that are new and are not SYN\n"
+       printf "Drop SYN packets with suspicios MSS value\n"
+       printf "Limit new TCP connections per second per source IP\n"
+       printf "Block packets with bogus TCP flags\n" 
+       printf "\n"
+       printf ".:: Anti-BruteForce config:\n"
        source /etc/antiflood.cfg
        printf "Port(s): $ports\n"
        printf "Seconds: $seconds\n"
        printf "Hitcount: $hitcount\n"
-       printf ".:: Run --config to update rules or --stop to remove\n"
+       printf ".:: Run --config to update bruteforce rules or --stop to remove\n"
        exit 1
     fi
 }
@@ -94,8 +122,10 @@ checkroot
        exit 1
     else
        source /etc/antiflood.cfg
-       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
-       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       #/sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m state --state NEW -m recent --set --name antiflood --rsource
+       #/sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m recent --update --seconds $seconds --hitcount $hitcount --rttl --name antiflood --rsource -j REJECT --reject-with tcp-reset
+       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m conntrack --ctstate NEW -m recent --set --name antiflood
+       /sbin/iptables -D INPUT -p tcp -m multiport --dports $ports -m conntrack --ctstate NEW -m recent --update --seconds $seconds --hitcount $hitcount -j DROP --name antiflood
        /sbin/iptables -D INPUT -p udp -j udpflood
        /sbin/iptables -D udpflood -p udp -m limit --limit 50/s -j RETURN
        /sbin/iptables -D udpflood -j DROP
@@ -121,16 +151,17 @@ checkroot
        /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP 
        /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP 
        /sbin/iptables -t mangle -D PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP  
-       /sbin/iptables -t mangle -D PREROUTING -s 224.0.0.0/3 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 169.254.0.0/16 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 172.16.0.0/12 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 192.0.2.0/24 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 192.168.0.0/16 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 10.0.0.0/8 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 0.0.0.0/8 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 240.0.0.0/5 -j DROP 
-       /sbin/iptables -t mangle -D PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
-       printf ".:: Anti-Flood Stopped\n"
+       #/sbin/iptables -t mangle -D PREROUTING -s 224.0.0.0/3 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 169.254.0.0/16 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 172.16.0.0/12 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 192.0.2.0/24 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 192.168.0.0/16 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 10.0.0.0/8 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 0.0.0.0/8 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 240.0.0.0/5 -j DROP 
+       #/sbin/iptables -t mangle -D PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP  
+       /sbin/iptables -t mangle -X
+ printf ".:: Anti-Flood Stopped\n"
        exit 1
     fi
 }
@@ -138,19 +169,19 @@ checkroot
 config() {
 checkroot
     if [[ $check == "" ]]; then
-       printf ".:: Starting Config\n"
+       printf ".:: Starting Anti-BruteForce Config\n"
     else
        printf ".:: Remove old rules first: --stop\n"
        exit 1
     fi
-default_ports="21,22,23,25,80,110,143,443"
+default_ports="21,22,23,25,110,143,443"
 default_seconds="60"
-default_hitcount="3"
-read -e -p "Anti-Flood Port(s) (Default: 21,22,23,25,80,110,143,443): " p
+default_hitcount="10"
+read -e -p "Anti-Flood Port(s) (Default: 21,22,23,25,110,143,443): " p
 p="${p:-${default_ports}}"
 read -e -p "Anti-Flood Seconds (Default: 60): " s
 s="${s:-${default_seconds}}"
-read -e -p "Anti-Flood Hitcount (Default: 3): " h
+read -e -p "Anti-Flood Hitcount (Default: 10): " h
 h="${h:-${default_hitcount}}"
     if [ ! -f "/etc/antiflood.cfg" ]; then
        /usr/bin/touch /etc/antiflood.cfg
