@@ -1,5 +1,5 @@
 # antiflood
-# Anti-Flood: DoS, DDoS, Brute Force
+# Anti-Flood: DoS, DDoS, Brute Force, SYN Flood, tcp UDP Flood
 > Usage
 ``` 
 chmod +x antiflood.sh
