@@ -1,4 +1,5 @@
 #!/bin/bash
+# ig: @thelinuxchoice
 check=$(/sbin/iptables -L | /bin/grep -o "antibrute") >&2
 
 checkroot() {
