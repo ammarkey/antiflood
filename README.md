@@ -3,9 +3,9 @@
 > Usage
 ``` 
 chmod +x antiflood.sh
-sudo ./antiflood --start
-sudo ./antiflood --config
-sudo ./antiflood --stop
+sudo ./antiflood.sh --start
+sudo ./antiflood.sh --config
+sudo ./antiflood.sh --stop
 ```
 ### Donate!
 Support the authors:
